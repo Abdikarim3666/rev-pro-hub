@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: rev-pro-hub
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: REV_SECRET_KEY
+        generateValue: true
+      - key: REV_HTTPS_ONLY
+        value: "1"
+      - key: REV_DB_PATH
+        value: /var/data/rev_pro_hub.db
+      - key: REV_ADMIN_EMAIL
+        sync: false
+      - key: REV_ADMIN_PASSWORD
+        sync: false
+      - key: REV_ADMIN_NAME
+        value: REV Pro-Hub Administrator
+    disk:
+      name: rev-pro-hub-data
+      mountPath: /var/data
+      sizeGB: 1
