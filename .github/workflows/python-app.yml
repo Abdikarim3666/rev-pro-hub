@@ -1,4 +1,118 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+import pytest
+
+# Locate the application whether it is in the repository
+# root or inside REV_Pro_Hub_Starter.
+REPO_DIR = Path(__file__).resolve().parent
+APP_DIR = REPO_DIR / "REV_Pro_Hub_Starter"
+
+if not (APP_DIR / "app.py").exists():
+    APP_DIR = REPO_DIR
+
+sys.path.insert(0, str(APP_DIR))
+
+# Use a separate database for automated testing.
+os.environ.setdefault(
+    "REV_DB_PATH",
+    str(
+        Path(tempfile.gettempdir())
+        / f"rev_pro_hub_test_{os.getpid()}.db"
+    ),
+)
+os.environ.setdefault(
+    "REV_SECRET_KEY",
+    "test-only-secret-not-for-production",
+)
+
+import app as rev_app
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.delenv("REV_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("REV_ADMIN_PASSWORD", raising=False)
+
+    monkeypatch.setattr(
+        rev_app,
+        "DB_PATH",
+        str(tmp_path / "test.db"),
+    )
+
+    rev_app.init_db()
+
+    rev_app.app.config.update(
+        TESTING=True,
+        SECRET_KEY="test-only-key",
+    )
+
+    with rev_app.app.test_client() as test_client:
+        yield test_client
+
+
+def test_public_pages_load(client):
+    pages = [
+        "/",
+        "/resources",
+        "/modules",
+        "/register",
+        "/login",
+    ]
+
+    for page in pages:
+        response = client.get(page)
+        assert response.status_code == 200
+
+
+def test_user_can_register(client):
+    response = client.post(
+        "/register",
+        data={
+            "full_name": "Test User",
+            "email": "test-user@example.com",
+            "password": "test-password-123",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Dashboard" in response.data or b"dashboard" in response.data
+
+
+def test_unapproved_user_cannot_access_restricted_module(client):
+    client.post(
+        "/register",
+        data={
+            "full_name": "Public User",
+            "email": "public-user@example.com",
+            "password": "test-password-123",
+        },
+        follow_redirects=True,
+    )
+
+    response = client.get("/restricted")
+
+    assert response.status_code == 403
+
+
+def test_invalid_registration_is_rejected(client):
+    response = client.post(
+        "/register",
+        data={
+            "full_name": "X",
+            "email": "invalid-email",
+            "password": "short",
+        },
+    )
+
+    assert response.status_code == 200
+    assert (
+        b"valid email" in response.data
+        or b"at least 10 characters" in response.data
+    )# This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
 name: Python application
